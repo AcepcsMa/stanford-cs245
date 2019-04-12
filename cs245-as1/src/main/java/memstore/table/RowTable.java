@@ -136,7 +136,7 @@ public class RowTable implements Table {
             int curVal = rows.getInt(offset);
             if (curVal < threshold) {
                 int val1 = rows.getInt(offset + ByteFormat.FIELD_LEN);
-                int val2 = rows.getInt(offset + ByteFormat.FIELD_LEN);
+                int val2 = rows.getInt(offset + 2 * ByteFormat.FIELD_LEN);
                 rows.putInt(offset + 3 * ByteFormat.FIELD_LEN, val1 + val2);
                 ++updated;
             }
