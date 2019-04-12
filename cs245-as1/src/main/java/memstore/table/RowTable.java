@@ -67,11 +67,9 @@ public class RowTable implements Table {
      */
     @Override
     public long columnSum() {
-        int offset = 0;
         long sum = 0;
         for (int i = 0;i < numRows;i++) {
-            sum += rows.getInt(offset);
-            offset += numCols * ByteFormat.FIELD_LEN;
+            sum += getIntField(i, 0);
         }
         return sum;
     }
@@ -85,16 +83,13 @@ public class RowTable implements Table {
      */
     @Override
     public long predicatedColumnSum(int threshold1, int threshold2) {
-        int offset = 0;
         long sum = 0;
         for (int i = 0;i < numRows;i++) {
-            int curVal = rows.getInt(offset);
-            int val1 = rows.getInt(offset + ByteFormat.FIELD_LEN);
-            int val2 = rows.getInt(offset + 2 * ByteFormat.FIELD_LEN);
+            int val1 = getIntField(i, 1);
+            int val2 = getIntField(i, 2);
             if (val1 > threshold1 && val2 < threshold2) {
-                sum += curVal;
+                sum += getIntField(i, 0);
             }
-            offset += numCols * ByteFormat.FIELD_LEN;
         }
         return sum;
     }
@@ -107,17 +102,15 @@ public class RowTable implements Table {
      */
     @Override
     public long predicatedAllColumnsSum(int threshold) {
-        int offset = 0;
         long sum = 0;
         for (int i = 0;i < numRows;i++) {
-            int curVal = rows.getInt(offset);
+            int curVal = getIntField(i, 0);
             if (curVal > threshold) {
                 sum += curVal;
                 for (int j = 1;j < numCols;j++) {
-                    sum += rows.getInt(offset + j * ByteFormat.FIELD_LEN);
+                    sum += getIntField(i, j);
                 }
             }
-            offset += numCols * ByteFormat.FIELD_LEN;
         }
         return sum;
     }
@@ -130,17 +123,15 @@ public class RowTable implements Table {
      */
     @Override
     public int predicatedUpdate(int threshold) {
-        int offset = 0;
         int updated = 0;
         for (int i = 0;i < numRows;i++) {
-            int curVal = rows.getInt(offset);
+            int curVal = getIntField(i, 0);
             if (curVal < threshold) {
-                int val1 = rows.getInt(offset + ByteFormat.FIELD_LEN);
-                int val2 = rows.getInt(offset + 2 * ByteFormat.FIELD_LEN);
-                rows.putInt(offset + 3 * ByteFormat.FIELD_LEN, val1 + val2);
+                int val1 = getIntField(i, 1);
+                int val2 = getIntField(i, 2);
+                putIntField(i, 3, val1 + val2);
                 ++updated;
             }
-            offset += numCols * ByteFormat.FIELD_LEN;
         }
         return updated;
     }
