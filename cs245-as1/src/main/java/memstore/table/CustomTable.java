@@ -1,15 +1,28 @@
 package memstore.table;
 
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import memstore.data.ByteFormat;
 import memstore.data.DataLoader;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Custom table implementation to adapt to provided query mix.
  */
 public class CustomTable implements Table {
 
-    public CustomTable() { }
+    protected int numRows;
+    protected int numCols;
+    protected ByteBuffer columns;
+    protected TreeMap<Integer, TreeMap<Integer, IntArrayList>> multiColIndex;
+
+    public CustomTable() {
+        multiColIndex = new TreeMap<>();
+    }
 
     /**
      * Loads data into the table through passed-in data loader. Is not timed.
@@ -19,7 +32,38 @@ public class CustomTable implements Table {
      */
     @Override
     public void load(DataLoader loader) throws IOException {
-        // TODO: Implement this!
+        this.numCols = loader.getNumCols();
+        List<ByteBuffer> rows = loader.getRows();
+        numRows = rows.size();
+        this.columns = ByteBuffer.allocate(ByteFormat.FIELD_LEN*numRows*numCols);
+
+        for (int rowId = 0; rowId < numRows; rowId++) {
+            ByteBuffer curRow = rows.get(rowId);
+            for (int colId = 0; colId < numCols; colId++) {
+                int offset = ByteFormat.FIELD_LEN * ((colId * numRows) + rowId);
+                int curVal = curRow.getInt(ByteFormat.FIELD_LEN * colId);
+                this.columns.putInt(offset, curVal);
+
+                // set up composite(multi-column) index, column-2 goes first, then column-1
+                if (colId == 2) {
+                    int val1 = getIntField(rowId, 1);
+                    TreeMap<Integer, IntArrayList> index = multiColIndex.getOrDefault(curVal, null);
+                    if (index == null) {
+                        index = new TreeMap<>();
+                        IntArrayList rowIds = new IntArrayList();
+                        rowIds.add(rowId);
+                        index.put(val1, rowIds);
+                    } else {
+                        IntArrayList rowIds = index.getOrDefault(val1, null);
+                        if (rowIds == null) {
+                            rowIds = new IntArrayList();
+                            index.put(val1, rowIds);
+                        }
+                        rowIds.add(rowId);
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -27,8 +71,8 @@ public class CustomTable implements Table {
      */
     @Override
     public int getIntField(int rowId, int colId) {
-        // TODO: Implement this!
-        return 0;
+        int offset = (colId * numRows + rowId) * ByteFormat.FIELD_LEN;
+        return columns.getInt(offset);
     }
 
     /**
@@ -36,7 +80,8 @@ public class CustomTable implements Table {
      */
     @Override
     public void putIntField(int rowId, int colId, int field) {
-        // TODO: Implement this!
+        int offset = (colId * numRows + rowId) * ByteFormat.FIELD_LEN;
+        columns.putInt(offset, field);
     }
 
     /**

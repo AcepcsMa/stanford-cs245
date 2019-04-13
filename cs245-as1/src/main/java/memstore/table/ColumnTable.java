@@ -13,6 +13,7 @@ import java.util.List;
  *   col 1 | col 2 | ... | col m.
  */
 public class ColumnTable implements Table {
+
     int numCols;
     int numRows;
     ByteBuffer columns;

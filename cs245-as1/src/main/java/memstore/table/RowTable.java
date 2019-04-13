@@ -13,6 +13,7 @@ import java.util.List;
  *   row 1 | row 2 | ... | row n.
  */
 public class RowTable implements Table {
+
     protected int numCols;
     protected int numRows;
     protected ByteBuffer rows;
