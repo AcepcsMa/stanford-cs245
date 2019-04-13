@@ -47,11 +47,12 @@ public class IndexedRowTable implements Table {
         for (int rowId = 0; rowId < numRows; rowId++) {
             ByteBuffer curRow = rows.get(rowId);
             for (int colId = 0; colId < numCols; colId++) {
-                int offset = ByteFormat.FIELD_LEN * ((rowId * numCols) + colId);
                 int curVal = curRow.getInt(ByteFormat.FIELD_LEN * colId);
-                this.rows.putInt(offset, curVal);
+                putIntField(rowId, colId, curVal);
+
+                // set up index on indexColumn
                 if (colId == indexColumn) {
-                    // set up index
+
                     IntArrayList rowIds = index.getOrDefault(curVal, null);
                     if (rowIds == null) {
                         rowIds = new IntArrayList();

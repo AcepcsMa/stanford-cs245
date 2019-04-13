@@ -36,8 +36,8 @@ public class RowTable implements Table {
         for (int rowId = 0; rowId < numRows; rowId++) {
             ByteBuffer curRow = rows.get(rowId);
             for (int colId = 0; colId < numCols; colId++) {
-                int offset = ByteFormat.FIELD_LEN * ((rowId * numCols) + colId);
-                this.rows.putInt(offset, curRow.getInt(ByteFormat.FIELD_LEN * colId));
+                int curVal = curRow.getInt(ByteFormat.FIELD_LEN * colId);
+                putIntField(rowId, colId, curVal);
             }
         }
     }

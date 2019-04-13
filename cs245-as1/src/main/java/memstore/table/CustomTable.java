@@ -40,11 +40,10 @@ public class CustomTable implements Table {
         for (int rowId = 0; rowId < numRows; rowId++) {
             ByteBuffer curRow = rows.get(rowId);
             for (int colId = 0; colId < numCols; colId++) {
-                int offset = ByteFormat.FIELD_LEN * ((colId * numRows) + rowId);
                 int curVal = curRow.getInt(ByteFormat.FIELD_LEN * colId);
-                this.columns.putInt(offset, curVal);
+                putIntField(rowId, colId, curVal);
 
-                // set up composite(multi-column) index, column-2 goes first, then column-1
+                // set up index on multiple columns, column-2 goes first, then column-1
                 if (colId == 2) {
                     int val1 = getIntField(rowId, 1);
                     TreeMap<Integer, IntArrayList> index = multiColIndex.getOrDefault(curVal, null);
