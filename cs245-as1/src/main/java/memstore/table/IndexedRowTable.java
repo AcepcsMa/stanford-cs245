@@ -1,10 +1,13 @@
 package memstore.table;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import memstore.data.ByteFormat;
 import memstore.data.DataLoader;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Iterator;
+import java.util.List;
 import java.util.TreeMap;
 
 /**
@@ -35,7 +38,29 @@ public class IndexedRowTable implements Table {
      */
     @Override
     public void load(DataLoader loader) throws IOException {
-        // TODO: Implement this!
+        index = new TreeMap<>();
+        this.numCols = loader.getNumCols();
+        List<ByteBuffer> rows = loader.getRows();
+        numRows = rows.size();
+        this.rows = ByteBuffer.allocate(ByteFormat.FIELD_LEN*numRows*numCols);
+
+        for (int rowId = 0; rowId < numRows; rowId++) {
+            ByteBuffer curRow = rows.get(rowId);
+            for (int colId = 0; colId < numCols; colId++) {
+                int offset = ByteFormat.FIELD_LEN * ((rowId * numCols) + colId);
+                int curVal = curRow.getInt(ByteFormat.FIELD_LEN * colId);
+                this.rows.putInt(offset, curVal);
+                if (colId == indexColumn) {
+                    // set up index
+                    IntArrayList rowIds = index.getOrDefault(curVal, null);
+                    if (rowIds == null) {
+                        rowIds = new IntArrayList();
+                    }
+                    rowIds.add(rowId);
+                    index.put(curVal, rowIds);
+                }
+            }
+        }
     }
 
     /**
@@ -43,8 +68,8 @@ public class IndexedRowTable implements Table {
      */
     @Override
     public int getIntField(int rowId, int colId) {
-        // TODO: Implement this!
-        return 0;
+        int offset = (rowId * numCols + colId) * ByteFormat.FIELD_LEN;
+        return rows.getInt(offset);
     }
 
     /**
@@ -52,7 +77,8 @@ public class IndexedRowTable implements Table {
      */
     @Override
     public void putIntField(int rowId, int colId, int field) {
-        // TODO: Implement this!
+        int offset = (rowId * numCols + colId) * ByteFormat.FIELD_LEN;
+        rows.putInt(offset, field);
     }
 
     /**
@@ -63,8 +89,28 @@ public class IndexedRowTable implements Table {
      */
     @Override
     public long columnSum() {
-        // TODO: Implement this!
-        return 0;
+        long sum = 0;
+        for (int i = 0;i < numRows;i++) {
+            int curVal = getIntField(i, 0);
+            sum += curVal;
+        }
+        return sum;
+    }
+
+    /**
+     * Check if a value satisfies the threshold predicate.
+     * @param rowId rowId
+     * @param filterColumnId the column to be filtered
+     * @param threshold threshold
+     * @return true/false
+     */
+    private boolean satisfyPredicate(int rowId, int filterColumnId, int threshold) {
+        int filterVal = getIntField(rowId, filterColumnId);
+        if (filterColumnId == 1) {
+            return filterVal > threshold;
+        } else {
+            return filterVal < threshold;
+        }
     }
 
     /**
@@ -76,8 +122,43 @@ public class IndexedRowTable implements Table {
      */
     @Override
     public long predicatedColumnSum(int threshold1, int threshold2) {
-        // TODO: Implement this!
-        return 0;
+        long sum = 0;
+
+        // in the case that we can utilize the index
+        if (indexColumn == 1 || indexColumn == 2) {
+            IntArrayList validRowIds = new IntArrayList();
+            for (Integer key : index.keySet()) {
+                if (indexColumn == 1 && key > threshold1) {
+                    validRowIds.addAll(index.get(key));
+                }
+                if (indexColumn == 2) {
+                    if (key < threshold2) {
+                        validRowIds.addAll(index.get(key));
+                    } else {
+                        break;  // if key >= threshold2, no need to go on, just break
+                    }
+                }
+            }
+
+            for (Integer rowId : validRowIds) {
+                int filterColId = indexColumn == 1 ? 2 : 1;
+                int threshold = indexColumn == 1 ? threshold2 : threshold1;
+                if (satisfyPredicate(rowId, filterColId, threshold)) {
+                    sum += getIntField(rowId, 0);
+                }
+            }
+            return sum;
+        }
+
+        // in the case that we can't use the index
+        for (int i = 0;i < numRows;i++) {
+            int val1 = getIntField(i, 1);
+            int val2 = getIntField(i, 2);
+            if (val1 > threshold1 && val2 < threshold2) {
+                sum += getIntField(i, 0);
+            }
+        }
+        return sum;
     }
 
     /**
@@ -88,8 +169,36 @@ public class IndexedRowTable implements Table {
      */
     @Override
     public long predicatedAllColumnsSum(int threshold) {
-        // TODO: Implement this!
-        return 0;
+        long sum = 0;
+
+        // in the case that we can utilize the index
+        if (indexColumn == 0) {
+            IntArrayList validRowIds = new IntArrayList();
+            for (Integer key : index.keySet()) {
+                if (key > threshold) {
+                    validRowIds.addAll(index.get(key));
+                }
+            }
+
+            for (Integer rowId : validRowIds) {
+                for (int j = 0;j < numCols;j++) {
+                    sum += getIntField(rowId, j);
+                }
+            }
+            return sum;
+        }
+
+        // in the case that we can't use the index
+        for (int i = 0;i < numRows;i++) {
+            int curVal = getIntField(i, 0);
+            if (curVal > threshold) {
+                sum += curVal;
+                for (int j = 1;j < numCols;j++) {
+                    sum += getIntField(i, j);
+                }
+            }
+        }
+        return sum;
     }
 
     /**
@@ -100,7 +209,38 @@ public class IndexedRowTable implements Table {
      */
     @Override
     public int predicatedUpdate(int threshold) {
-        // TODO: Implement this!
-        return 0;
+        int updated = 0;
+
+        // in the case that we can utilize the index
+        if (indexColumn == 0) {
+            IntArrayList validRowIds = new IntArrayList();
+            for (Integer key : index.keySet()) {
+                if (key < threshold) {
+                    validRowIds.addAll(index.get(key));
+                } else {
+                    break;
+                }
+            }
+
+            for (Integer rowId : validRowIds) {
+                int val1 = getIntField(rowId, 1);
+                int val2 = getIntField(rowId, 2);
+                putIntField(rowId, 3, val1 + val2);
+            }
+            updated = validRowIds.size();
+            return updated;
+        }
+
+        // in the case that we can't use the index
+        for (int i = 0;i < numRows;i++) {
+            int curVal = getIntField(i, 0);
+            if (curVal < threshold) {
+                int val1 = getIntField(i, 1);
+                int val2 = getIntField(i, 2);
+                putIntField(i, 3, val1 + val2);
+                ++updated;
+            }
+        }
+        return updated;
     }
 }
