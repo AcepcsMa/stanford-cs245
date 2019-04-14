@@ -6,9 +6,7 @@ import memstore.data.DataLoader;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeMap;
 
 /**
@@ -21,14 +19,18 @@ public class CustomTable implements Table {
     protected int numHiddenCols;
     protected ByteBuffer columns;
     protected TreeMap<Integer, TreeMap<Integer, IntArrayList>> multiColIndex;
-    protected TreeMap<Integer, IntArrayList> singleColIndex;
+    protected TreeMap<Integer, IntArrayList> singleColIndex0;
+    protected TreeMap<Integer, IntArrayList> singleColIndex1;
+    protected TreeMap<Integer, IntArrayList> singleColIndex2;
     protected ByteBuffer rowSums;
     public static int ROW_SUM_FIELD_LEN = 8;
 
     public CustomTable() {
         numHiddenCols = 1;
         multiColIndex = new TreeMap<>();
-        singleColIndex = new TreeMap<>();
+        singleColIndex0 = new TreeMap<>();
+        singleColIndex1 = new TreeMap<>();
+        singleColIndex2 = new TreeMap<>();
     }
 
     /**
@@ -55,32 +57,40 @@ public class CustomTable implements Table {
 
                 // set up single-column index on column-0
                 if (colId == 0) {
-                    IntArrayList rowIds = singleColIndex.getOrDefault(curVal, null);
+                    IntArrayList rowIds = singleColIndex0.getOrDefault(curVal, null);
                     if (rowIds == null) {
                         rowIds = new IntArrayList();
-                        singleColIndex.put(curVal, rowIds);
+                        singleColIndex0.put(curVal, rowIds);
                     }
                     rowIds.add(rowId);
                 }
 
                 // set up index on multiple columns, column-2 goes first, then column-1
-                if (colId == 2) {
-                    int val1 = getIntField(rowId, 1);
-                    TreeMap<Integer, IntArrayList> index = multiColIndex.getOrDefault(curVal, null);
-                    if (index == null) {
-                        index = new TreeMap<>();
-                        IntArrayList rowIds = new IntArrayList();
-                        rowIds.add(rowId);
-                        index.put(val1, rowIds);
-                    } else {
-                        IntArrayList rowIds = index.getOrDefault(val1, null);
-                        if (rowIds == null) {
-                            rowIds = new IntArrayList();
-                            index.put(val1, rowIds);
-                        }
-                        rowIds.add(rowId);
+                if (colId == 1 || colId == 2) {
+                    TreeMap<Integer, IntArrayList> curIndex = colId == 1 ? singleColIndex1 : singleColIndex2;
+                    IntArrayList rowIds = curIndex.getOrDefault(curVal, null);
+                    if (rowIds == null) {
+                        rowIds = new IntArrayList();
+                        curIndex.put(curVal, rowIds);
                     }
-                    multiColIndex.put(curVal, index);
+                    rowIds.add(rowId);
+
+//                    int val1 = getIntField(rowId, 1);
+//                    TreeMap<Integer, IntArrayList> index = multiColIndex.getOrDefault(curVal, null);
+//                    if (index == null) {
+//                        index = new TreeMap<>();
+//                        IntArrayList rowIds = new IntArrayList();
+//                        rowIds.add(rowId);
+//                        index.put(val1, rowIds);
+//                    } else {
+//                        IntArrayList rowIds = index.getOrDefault(val1, null);
+//                        if (rowIds == null) {
+//                            rowIds = new IntArrayList();
+//                            index.put(val1, rowIds);
+//                        }
+//                        rowIds.add(rowId);
+//                    }
+//                    multiColIndex.put(curVal, index);
                 }
             }
             int rowSumOffset = rowId * ROW_SUM_FIELD_LEN;
@@ -114,10 +124,13 @@ public class CustomTable implements Table {
      */
     @Override
     public long columnSum() {
+//        long start = System.currentTimeMillis();
         long sum = 0;
-        for (Integer key : singleColIndex.keySet()) {
-            sum += key * singleColIndex.get(key).size();
+        for (Integer key : singleColIndex0.keySet()) {
+            sum += key * singleColIndex0.get(key).size();
         }
+//        long end = System.currentTimeMillis();
+//        System.out.println(String.format("columnSum: %d ms", end - start));
         return sum;
     }
 
@@ -130,24 +143,25 @@ public class CustomTable implements Table {
      */
     @Override
     public long predicatedColumnSum(int threshold1, int threshold2) {
+//        long start = System.currentTimeMillis();
         long sum = 0;
-        IntArrayList validRowIds = new IntArrayList();
-        for (Integer key2 : multiColIndex.keySet()) {
+        IntArrayList validRowIds2 = new IntArrayList();
+        for (Integer key2 : singleColIndex2.keySet()) {
             if (key2 < threshold2) {
-                TreeMap<Integer, IntArrayList> index = multiColIndex.get(key2);
-                for (Integer key1 : index.keySet()) {
-                    if (key1 > threshold1) {
-                        validRowIds.addAll(index.get(key1));
-                    }
-                }
+                validRowIds2.addAll(singleColIndex2.get(key2));
             } else {
                 break;
             }
         }
 
-        for (Integer rowId : validRowIds) {
-            sum += getIntField(rowId, 0);
+        for (Integer rowId : validRowIds2) {
+            int val1 = getIntField(rowId, 1);
+            if (val1 > threshold1) {
+                sum += getIntField(rowId, 0);
+            }
         }
+//        long end = System.currentTimeMillis();
+//        System.out.println(String.format("predicatedColumnSum: %d ms", end - start));
         return sum;
     }
 
@@ -159,11 +173,12 @@ public class CustomTable implements Table {
      */
     @Override
     public long predicatedAllColumnsSum(int threshold) {
+//        long start = System.currentTimeMillis();
         long sum = 0;
         IntArrayList validRowIds = new IntArrayList();
-        for (Integer key : singleColIndex.keySet()) {
+        for (Integer key : singleColIndex0.keySet()) {
             if (key > threshold) {
-                validRowIds.addAll(singleColIndex.get(key));
+                validRowIds.addAll(singleColIndex0.get(key));
             }
         }
 
@@ -172,6 +187,8 @@ public class CustomTable implements Table {
             int rowSumOffset = ROW_SUM_FIELD_LEN * rowId;
             sum += rowSums.getLong(rowSumOffset);
         }
+//        long end = System.currentTimeMillis();
+//        System.out.println(String.format("predicatedAllColumnsSum: %d ms", end - start));
         return sum;
     }
 
@@ -183,15 +200,19 @@ public class CustomTable implements Table {
      */
     @Override
     public int predicatedUpdate(int threshold) {
+        long start = System.currentTimeMillis();
         IntArrayList validRowIds = new IntArrayList();
-        for (Integer key : singleColIndex.keySet()) {
+        for (Integer key : singleColIndex0.keySet()) {
             if (key < threshold) {
-                validRowIds.addAll(singleColIndex.get(key));
+                validRowIds.addAll(singleColIndex0.get(key));
             } else {
                 break;
             }
         }
+        long end = System.currentTimeMillis();
+        System.out.println(String.format("PredicatedUpdate Phase #1: %d ms", end - start));
 
+        start = System.currentTimeMillis();
         for (Integer rowId : validRowIds) {
             int val1 = getIntField(rowId, 1);
             int val2 = getIntField(rowId, 2);
@@ -203,6 +224,8 @@ public class CustomTable implements Table {
             rowSums.putLong(rowSumOffset, prevRowSum + diff);
         }
         int updated = validRowIds.size();
+        end = System.currentTimeMillis();
+        System.out.println(String.format("PredicatedUpdate Phase #2: %d ms", end - start));
         return updated;
     }
 

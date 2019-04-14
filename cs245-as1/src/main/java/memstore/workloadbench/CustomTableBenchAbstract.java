@@ -42,14 +42,29 @@ public abstract class CustomTableBenchAbstract {
 
         long finalResult = 0;
         for (int i = 0; i < numQueries; i++) {
+            long start = System.currentTimeMillis();
             finalResult += table.predicatedUpdate(
                     random.nextInt(upperBoundColumnValue));
+//            long end = System.currentTimeMillis();
+//            System.out.println(String.format("predicatedUpdate: %d ms", end - start));
+
+            start = System.currentTimeMillis();
             finalResult += table.columnSum();
+//            end = System.currentTimeMillis();
+//            System.out.println(String.format("columnSum: %d ms", end - start));
+
+            start = System.currentTimeMillis();
             finalResult += table.predicatedColumnSum(
                     random.nextInt(upperBoundColumnValue),
                     random.nextInt(upperBoundColumnValue));
+//            end = System.currentTimeMillis();
+//            System.out.println(String.format("predicatedColumnSum: %d ms", end - start));
+
+            start = System.currentTimeMillis();
             finalResult += table.predicatedAllColumnsSum(
                     random.nextInt(upperBoundColumnValue));
+//            end = System.currentTimeMillis();
+//            System.out.println(String.format("predicatedAllColumnSum: %d ms", end - start));
         }
         return finalResult;
     }

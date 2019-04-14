@@ -6,6 +6,7 @@ import memstore.data.RandomizedLoader;
 import org.openjdk.jmh.annotations.*;
 
 import java.io.IOException;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -39,6 +40,37 @@ public class NarrowCustomTableBench extends CustomTableBenchAbstract {
 
     @Benchmark
     public long testQueries() {
-        return super.testQueries();
+//        return super.testQueries();
+
+        // Make sure testQueries uses the same seed across runs.
+        random = new Random(seed);
+
+        long finalResult = 0;
+        for (int i = 0; i < numQueries; i++) {
+            long start = System.currentTimeMillis();
+            finalResult += table.predicatedUpdate(
+                    random.nextInt(upperBoundColumnValue));
+            long end = System.currentTimeMillis();
+            System.out.println(String.format("predicatedUpdate: %d ms", end - start));
+
+            start = System.currentTimeMillis();
+            finalResult += table.columnSum();
+//            end = System.currentTimeMillis();
+//            System.out.println(String.format("columnSum: %d ms", end - start));
+
+            start = System.currentTimeMillis();
+            finalResult += table.predicatedColumnSum(
+                    random.nextInt(upperBoundColumnValue),
+                    random.nextInt(upperBoundColumnValue));
+//            end = System.currentTimeMillis();
+//            System.out.println(String.format("predicatedColumnSum: %d ms", end - start));
+
+            start = System.currentTimeMillis();
+            finalResult += table.predicatedAllColumnsSum(
+                    random.nextInt(upperBoundColumnValue));
+//            end = System.currentTimeMillis();
+//            System.out.println(String.format("predicatedAllColumnSum: %d ms", end - start));
+        }
+        return finalResult;
     }
 }
