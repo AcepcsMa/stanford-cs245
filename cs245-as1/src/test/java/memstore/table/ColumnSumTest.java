@@ -42,4 +42,11 @@ public class ColumnSumTest {
         it.load(dl);
         assertEquals(68, it.columnSum());
     }
+
+    @Test
+    public void testCustomTable() throws IOException {
+        CustomTable customTable = new CustomTable();
+        customTable.load(dl);
+        assertEquals(68, customTable.columnSum());
+    }
 }

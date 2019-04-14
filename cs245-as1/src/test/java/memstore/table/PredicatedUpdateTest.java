@@ -42,4 +42,11 @@ public class PredicatedUpdateTest {
         it.load(dl);
         assertEquals(9, it.predicatedUpdate(3));
     }
+
+    @Test
+    public void testCustomTable() throws IOException {
+        CustomTable customTable = new CustomTable();
+        customTable.load(dl);
+        assertEquals(9, customTable.predicatedUpdate(3));
+    }
 }
