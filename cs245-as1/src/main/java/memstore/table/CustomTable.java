@@ -6,6 +6,7 @@ import memstore.data.DataLoader;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.BitSet;
 import java.util.List;
 import java.util.TreeMap;
 
@@ -18,16 +19,16 @@ public class CustomTable implements Table {
     protected int numCols;
     protected int numHiddenCols;
     protected ByteBuffer columns;
-    protected TreeMap<Integer, TreeMap<Integer, IntArrayList>> multiColIndex;
     protected TreeMap<Integer, IntArrayList> singleColIndex0;
     protected TreeMap<Integer, IntArrayList> singleColIndex1;
     protected TreeMap<Integer, IntArrayList> singleColIndex2;
     protected ByteBuffer rowSums;
+    protected ByteBuffer preCookedCol3;
+    protected BitSet isUpdated;
     public static int ROW_SUM_FIELD_LEN = 8;
 
     public CustomTable() {
         numHiddenCols = 1;
-        multiColIndex = new TreeMap<>();
         singleColIndex0 = new TreeMap<>();
         singleColIndex1 = new TreeMap<>();
         singleColIndex2 = new TreeMap<>();
@@ -46,6 +47,8 @@ public class CustomTable implements Table {
         numRows = rows.size();
         this.columns = ByteBuffer.allocate(ByteFormat.FIELD_LEN * numRows * numCols);
         this.rowSums = ByteBuffer.allocate(ROW_SUM_FIELD_LEN * numRows);
+        this.preCookedCol3 = ByteBuffer.allocate(ByteFormat.FIELD_LEN * numRows);
+        this.isUpdated = new BitSet(numRows);
 
         for (int rowId = 0; rowId < numRows; rowId++) {
             ByteBuffer curRow = rows.get(rowId);
@@ -74,23 +77,14 @@ public class CustomTable implements Table {
                         curIndex.put(curVal, rowIds);
                     }
                     rowIds.add(rowId);
+                }
 
-//                    int val1 = getIntField(rowId, 1);
-//                    TreeMap<Integer, IntArrayList> index = multiColIndex.getOrDefault(curVal, null);
-//                    if (index == null) {
-//                        index = new TreeMap<>();
-//                        IntArrayList rowIds = new IntArrayList();
-//                        rowIds.add(rowId);
-//                        index.put(val1, rowIds);
-//                    } else {
-//                        IntArrayList rowIds = index.getOrDefault(val1, null);
-//                        if (rowIds == null) {
-//                            rowIds = new IntArrayList();
-//                            index.put(val1, rowIds);
-//                        }
-//                        rowIds.add(rowId);
-//                    }
-//                    multiColIndex.put(curVal, index);
+                // pre cook col3 = col1 + col2
+                if (colId == 3) {
+                    int val1 = getIntField(rowId, 1);
+                    int val2 = getIntField(rowId, 2);
+                    int offset = rowId * ByteFormat.FIELD_LEN;
+                    preCookedCol3.putInt(offset, val1 + val2);
                 }
             }
             int rowSumOffset = rowId * ROW_SUM_FIELD_LEN;
@@ -186,6 +180,11 @@ public class CustomTable implements Table {
         for (Integer rowId : validRowIds) {
             int rowSumOffset = ROW_SUM_FIELD_LEN * rowId;
             sum += rowSums.getLong(rowSumOffset);
+            if (isUpdated.get(rowId)) {
+                sum -= getIntField(rowId, 3);
+                int preCookedOffset = rowId * ByteFormat.FIELD_LEN;
+                sum += preCookedCol3.getInt(preCookedOffset);
+            }
         }
 //        long end = System.currentTimeMillis();
 //        System.out.println(String.format("predicatedAllColumnsSum: %d ms", end - start));
@@ -200,7 +199,7 @@ public class CustomTable implements Table {
      */
     @Override
     public int predicatedUpdate(int threshold) {
-        long start = System.currentTimeMillis();
+//        long start = System.currentTimeMillis();
         IntArrayList validRowIds = new IntArrayList();
         for (Integer key : singleColIndex0.keySet()) {
             if (key < threshold) {
@@ -209,24 +208,33 @@ public class CustomTable implements Table {
                 break;
             }
         }
-        long end = System.currentTimeMillis();
-        System.out.println(String.format("PredicatedUpdate Phase #1: %d ms", end - start));
+//        long end = System.currentTimeMillis();
+//        System.out.println(String.format("PredicatedUpdate Phase #1: %d ms", end - start));
 
-        start = System.currentTimeMillis();
+//        start = System.currentTimeMillis();
         for (Integer rowId : validRowIds) {
-            int val1 = getIntField(rowId, 1);
-            int val2 = getIntField(rowId, 2);
-            int val3 = getIntField(rowId, 3);
-            long diff = val1 + val2 - val3;
-            putIntField(rowId, 3, val1 + val2);
-            int rowSumOffset = ROW_SUM_FIELD_LEN * rowId;
-            long prevRowSum = rowSums.getLong(rowSumOffset);
-            rowSums.putLong(rowSumOffset, prevRowSum + diff);
+            isUpdated.set(rowId, true);
         }
-        int updated = validRowIds.size();
-        end = System.currentTimeMillis();
-        System.out.println(String.format("PredicatedUpdate Phase #2: %d ms", end - start));
-        return updated;
+        return validRowIds.size();
+//        end = System.currentTimeMillis();
+//        System.out.println(String.format("PredicatedUpdate Phase #2 (BitSet): %d ms", end - start));
+
+//        start = System.currentTimeMillis();
+//        for (Integer rowId : validRowIds) {
+//            int val1 = getIntField(rowId, 1);
+//            int val2 = getIntField(rowId, 2);
+//            int val3 = getIntField(rowId, 3);
+//            long diff = val1 + val2 - val3;
+//            putIntField(rowId, 3, val1 + val2);
+//            int rowSumOffset = ROW_SUM_FIELD_LEN * rowId;
+//            long prevRowSum = rowSums.getLong(rowSumOffset);
+//            rowSums.putLong(rowSumOffset, prevRowSum + diff);
+//        }
+//        int updated = validRowIds.size();
+//        end = System.currentTimeMillis();
+//        System.out.println(String.format("Valid Row Count: %d", updated));
+//        System.out.println(String.format("PredicatedUpdate Phase #3: %d ms", end - start));
+//        return updated;
     }
 
 }

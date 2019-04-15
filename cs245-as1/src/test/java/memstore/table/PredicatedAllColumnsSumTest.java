@@ -47,6 +47,6 @@ public class PredicatedAllColumnsSumTest {
     public void testCustomTable() throws IOException {
         CustomTable customTable = new CustomTable();
         customTable.load(dl);
-        assertEquals(51, customTable.predicatedAllColumnsSum(8));
+        assertEquals(166, customTable.predicatedAllColumnsSum(3));
     }
 }
