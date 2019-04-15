@@ -52,7 +52,6 @@ public class IndexedRowTable implements Table {
 
                 // set up index on indexColumn
                 if (colId == indexColumn) {
-
                     IntArrayList rowIds = index.getOrDefault(curVal, null);
                     if (rowIds == null) {
                         rowIds = new IntArrayList();
@@ -175,9 +174,11 @@ public class IndexedRowTable implements Table {
         // in the case that we can utilize the index
         if (indexColumn == 0) {
             IntArrayList validRowIds = new IntArrayList();
-            for (Integer key : index.keySet()) {
+            for (Integer key : index.descendingKeySet()) {
                 if (key > threshold) {
                     validRowIds.addAll(index.get(key));
+                } else {
+                    break;
                 }
             }
 
